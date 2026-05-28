@@ -1,0 +1,8 @@
+{
+  "acne_types": ["blackheads", "whiteheads", "papules", "pustules", "nodules", "cysts"],
+  "severity_levels": ["mild", "moderate", "severe"],
+  "concern_types": ["dryness", "oiliness", "redness", "wrinkles", "dark_spots"],
+  "input_shape": [224, 224, 3],
+  "model_version": "1.0.0",
+  "framework": "elixir_nx_axon"
+}

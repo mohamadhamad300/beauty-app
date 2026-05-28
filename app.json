@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Glow - Beauty & Skincare",
+    "slug": "beauty-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Glow needs camera access for skin analysis and virtual makeup try-on."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF5F5"
+      },
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.beautyapp"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Glow needs camera access for skin analysis."
+        }
+      ],
+      "expo-video"
+    ]
+  }
+}
