@@ -1,24 +1,17 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions, ActivityIndicator, Alert } from 'react-native';
-import { Camera, useCameraDevice, useCameraPermission, usePhotoOutput, usePreviewOutput, useObjectOutput } from 'react-native-vision-camera';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, Pressable, Dimensions, Alert, Platform } from 'react-native';
+import { Camera, useCameraDevice, useCameraPermission, usePhotoOutput, usePreviewOutput, CommonResolutions } from 'react-native-vision-camera';
+import { Canvas, RoundedRect, Group, Oval, Path, Skia, BlendMode } from '@shopify/react-native-skia';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Save, EyeOff } from 'lucide-react-native';
 import { colors } from '../constants/theme';
 import type { FaceZones } from '../services/faceDetection';
-import { CommonResolutions } from 'react-native-vision-camera';
+import { loadFaceMeshModels } from '../services/faceMeshService';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
 const CAM_H = SCREEN_W * 4 / 3;
 
 type BrushTool = 'foundation' | 'blush' | 'lipstick' | 'eyeshadow';
-
-interface MakeupLayer {
-  id: string;
-  zone: keyof FaceZones;
-  color: string;
-  opacity: number;
-  brush: BrushTool;
-}
 
 const BRUSH_TOOLS: { id: BrushTool; label: string; icon: string }[] = [
   { id: 'foundation', label: 'Foundation', icon: '⬜' },
@@ -41,15 +34,29 @@ const BRUSH_TO_ZONE: Record<BrushTool, (keyof FaceZones)[]> = {
   eyeshadow: ['leftEye', 'rightEye'],
 };
 
+interface MakeupStyle {
+  zone: keyof FaceZones;
+  color: string;
+  opacity: number;
+}
+
+function makeLipPath(cx: number, cy: number, w: number, h: number) {
+  const path = Skia.Path.Make();
+  path.moveTo(cx - w * 0.5, cy);
+  path.cubicTo(cx - w * 0.5, cy - h * 0.4, cx + w * 0.5, cy - h * 0.4, cx + w * 0.5, cy);
+  path.cubicTo(cx + w * 0.5, cy + h * 0.6, cx - w * 0.5, cy + h * 0.6, cx - w * 0.5, cy);
+  path.close();
+  return path;
+}
+
 function boundingBoxToZones(box: { x: number; y: number; width: number; height: number }): FaceZones {
   const fx = box.x * SCREEN_W;
   const fy = box.y * CAM_H;
   const fw = box.width * SCREEN_W;
   const fh = box.height * CAM_H;
-
   return {
-    leftEye: { x: fx + fw * 0.28, y: fy + fh * 0.25, w: 30, h: 20 },
-    rightEye: { x: fx + fw * 0.68, y: fy + fh * 0.25, w: 30, h: 20 },
+    leftEye: { x: fx + fw * 0.28, y: fy + fh * 0.25, w: 30, h: 16 },
+    rightEye: { x: fx + fw * 0.68, y: fy + fh * 0.25, w: 30, h: 16 },
     lips: { x: fx + fw * 0.25, y: fy + fh * 0.68, w: fw * 0.5, h: fh * 0.12 },
     leftCheek: { x: fx + fw * 0.03, y: fy + fh * 0.35, w: fw * 0.22, h: fh * 0.22 },
     rightCheek: { x: fx + fw * 0.75, y: fy + fh * 0.35, w: fw * 0.22, h: fh * 0.22 },
@@ -65,8 +72,8 @@ function initialZones(): FaceZones {
   const fx = (SCREEN_W - fw) / 2;
   const fy = CAM_H * 0.08;
   return {
-    leftEye: { x: fx + fw * 0.28, y: fy + fh * 0.25, w: 30, h: 20 },
-    rightEye: { x: fx + fw * 0.68, y: fy + fh * 0.25, w: 30, h: 20 },
+    leftEye: { x: fx + fw * 0.28, y: fy + fh * 0.25, w: 30, h: 16 },
+    rightEye: { x: fx + fw * 0.68, y: fy + fh * 0.25, w: 30, h: 16 },
     lips: { x: fx + fw * 0.25, y: fy + fh * 0.68, w: fw * 0.5, h: fh * 0.12 },
     leftCheek: { x: fx + fw * 0.03, y: fy + fh * 0.35, w: fw * 0.22, h: fh * 0.22 },
     rightCheek: { x: fx + fw * 0.75, y: fy + fh * 0.35, w: fw * 0.22, h: fh * 0.22 },
@@ -76,95 +83,136 @@ function initialZones(): FaceZones {
   };
 }
 
+function MakeupOverlay({ zones, styles }: { zones: FaceZones; styles: MakeupStyle[] }) {
+  return (
+    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+      {styles.map((s) => {
+        const z = zones[s.zone];
+        if (!z) return null;
+        const cx = z.x + z.w / 2;
+        const cy = z.y + z.h / 2;
+        const opacity = s.opacity;
+
+        if (s.zone === 'lips') {
+          const path = makeLipPath(cx, cy, z.w * 0.9, z.h * 0.5);
+          return (
+            <Path
+              key={s.zone}
+              path={path}
+              color={s.color}
+              opacity={opacity}
+              style="fill"
+              blendMode={BlendMode.Screen}
+            />
+          );
+        }
+
+        if (s.zone === 'leftEye' || s.zone === 'rightEye') {
+          const w = Math.max(z.w, 20);
+          const h = Math.max(z.h, 10);
+          return (
+            <Oval
+              key={s.zone}
+              x={cx - w / 2}
+              y={cy - h / 2}
+              width={w}
+              height={h}
+              color={s.color}
+              opacity={opacity}
+              blendMode={BlendMode.Screen}
+            />
+          );
+        }
+
+        return (
+          <RoundedRect
+            key={s.zone}
+            x={z.x}
+            y={z.y}
+            width={z.w}
+            height={z.h}
+            r={Math.min(z.w, z.h) * 0.3}
+            color={s.color}
+            opacity={opacity}
+            blendMode={BlendMode.Screen}
+          />
+        );
+      })}
+    </Canvas>
+  );
+}
+
 export default function ARMakeupScreen() {
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('front');
   const previewOutput = usePreviewOutput();
   const photoOutput = usePhotoOutput({
-    targetResolution: CommonResolutions.UHD_4_3,
+    targetResolution: CommonResolutions.FHD_4_3,
     qualityPrioritization: 'speed',
     quality: 0.3,
   });
   const [faceZones, setFaceZones] = useState<FaceZones>(initialZones);
+  const [camError, setCamError] = useState<string | null>(null);
+  const [objOutput, setObjOutput] = useState<any>(undefined);
 
-  const objOutput = useObjectOutput({
-    types: ['face'],
-    onObjectsScanned(objects) {
-      const face = objects.find((o) => o.type === 'face');
-      if (face) {
-        setFaceZones(boundingBoxToZones(face.boundingBox));
-      }
-    },
-  });
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const { VisionCamera } = require('react-native-vision-camera');
+    const output = VisionCamera.createObjectOutput({ enabledObjectTypes: ['face'] });
+    output.setOnObjectsScannedCallback((objects: any[]) => {
+      const face = objects.find((o: any) => o.type === 'face');
+      if (face) setFaceZones(boundingBoxToZones(face.boundingBox));
+    });
+    setObjOutput(output);
+  }, []);
 
   const [activeBrush, setActiveBrush] = useState<BrushTool>('lipstick');
   const [activeColor, setActiveColor] = useState('#DC143C');
-  const [layers, setLayers] = useState<MakeupLayer[]>([]);
+  const [currentStyles, setCurrentStyles] = useState<MakeupStyle[]>([]);
   const [showPalette, setShowPalette] = useState(false);
-  const [detecting, setDetecting] = useState(false);
   const initDone = useRef(false);
+
+  const defaultStyles: MakeupStyle[] = useMemo(() => [
+    { zone: 'forehead', color: '#F4A460', opacity: 0.35 },
+    { zone: 'leftCheek', color: '#FFB6C1', opacity: 0.4 },
+    { zone: 'rightCheek', color: '#FFB6C1', opacity: 0.4 },
+    { zone: 'nose', color: '#F4A460', opacity: 0.3 },
+    { zone: 'chin', color: '#F4A460', opacity: 0.3 },
+    { zone: 'lips', color: '#DC143C', opacity: 0.5 },
+    { zone: 'leftEye', color: '#C71585', opacity: 0.4 },
+    { zone: 'rightEye', color: '#C71585', opacity: 0.4 },
+  ], []);
 
   useEffect(() => {
     if (initDone.current) return;
     initDone.current = true;
-    setTimeout(() => {
-      setLayers(makeAllLayers(initialZones()));
-    }, 200);
-  }, []);
+    loadFaceMeshModels();
+    setTimeout(() => setCurrentStyles(defaultStyles), 200);
+  }, [defaultStyles]);
 
-  const makeAllLayers = (zones: FaceZones) => {
-    const allBrushes: { brush: BrushTool; color: string }[] = [
-      { brush: 'foundation', color: '#F4A460' },
-      { brush: 'blush', color: '#FFB6C1' },
-      { brush: 'lipstick', color: '#DC143C' },
-      { brush: 'eyeshadow', color: '#C71585' },
-    ];
-    const newLayers: MakeupLayer[] = [];
-    for (const { brush, color } of allBrushes) {
-      for (const zone of BRUSH_TO_ZONE[brush]) {
-        newLayers.push({ id: `${brush}-${zone}`, zone, color, opacity: 0.5, brush });
-      }
-    }
-    return newLayers;
-  };
-
-  const handleBrushPress = (brush: BrushTool) => {
+  const handleBrushPress = useCallback((brush: BrushTool) => {
     setActiveBrush(brush);
     setShowPalette(false);
-    const color = brush === 'lipstick' ? '#DC143C' :
-      brush === 'blush' ? '#FFB6C1' :
-      brush === 'foundation' ? '#F4A460' : '#C71585';
-    setLayers((prev) => [
-      ...prev.filter((l) => l.brush !== brush),
-      ...BRUSH_TO_ZONE[brush].map((zone) => ({
-        id: `${brush}-${zone}`, zone, color, opacity: 0.7, brush,
-      })),
+    const color = brush === 'lipstick' ? '#DC143C'
+      : brush === 'blush' ? '#FFB6C1'
+      : brush === 'foundation' ? '#F4A460' : '#C71585';
+    setCurrentStyles((prev) => [
+      ...prev.filter((s) => !BRUSH_TO_ZONE[brush].includes(s.zone)),
+      ...BRUSH_TO_ZONE[brush].map((zone) => ({ zone, color, opacity: 0.6 })),
     ]);
-  };
+  }, []);
 
-  const handleColorPress = (color: string) => {
+  const handleColorPress = useCallback((color: string) => {
     setActiveColor(color);
     setShowPalette(false);
-    setLayers((prev) => [
-      ...prev.filter((l) => l.brush !== activeBrush),
-      ...BRUSH_TO_ZONE[activeBrush].map((zone) => ({
-        id: `${activeBrush}-${zone}`, zone, color, opacity: 0.7, brush: activeBrush,
-      })),
+    setCurrentStyles((prev) => [
+      ...prev.filter((s) => !BRUSH_TO_ZONE[activeBrush].includes(s.zone)),
+      ...BRUSH_TO_ZONE[activeBrush].map((zone) => ({ zone, color, opacity: 0.6 })),
     ]);
-  };
+  }, [activeBrush]);
 
-  const clearAll = () => setLayers([]);
-
-  const getZoneStyle = (zone: keyof FaceZones) => {
-    const z = faceZones[zone];
-    if (!z) return {};
-    return {
-      position: 'absolute' as const,
-      left: z.x, top: z.y, width: z.w, height: z.h,
-      borderRadius: Math.min(z.w, z.h) * 0.3, opacity: 0.7,
-    };
-  };
+  const clearAll = useCallback(() => setCurrentStyles([]), []);
 
   if (!hasPermission) {
     return (
@@ -185,6 +233,14 @@ export default function ARMakeupScreen() {
     );
   }
 
+  if (camError) {
+    return (
+      <View style={[s.container, { paddingTop: insets.top }]}>
+        <Text style={s.msg}>Camera error: {camError}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
       <View style={s.header}>
@@ -200,33 +256,10 @@ export default function ARMakeupScreen() {
           style={{ width: SCREEN_W, height: CAM_H }}
           device={device}
           isActive={true}
-          outputs={[previewOutput, photoOutput, objOutput]}
+          outputs={[previewOutput, photoOutput, objOutput].filter(Boolean)}
+          onError={(e) => setCamError(e.message)}
         />
-
-        <View style={s.faceOverlay} pointerEvents="none">
-          {layers.map((layer) => {
-            const z = faceZones[layer.zone];
-            if (!z) return null;
-            return (
-              <View key={layer.id} style={[getZoneStyle(layer.zone), { backgroundColor: layer.color }]} />
-            );
-          })}
-          {Object.entries(faceZones).map(([name, z]) => (
-            <View key={`z-${name}`} style={{
-              position: 'absolute', left: z.x - 2, top: z.y - 2,
-              width: z.w + 4, height: z.h + 4,
-              borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)',
-              borderRadius: Math.min(z.w, z.h) * 0.3,
-              justifyContent: 'flex-start', alignItems: 'flex-end',
-            }}>
-              <Text style={{
-                color: '#fff', fontSize: 8, fontWeight: '800',
-                backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 3, paddingVertical: 1,
-                borderTopLeftRadius: 4, borderBottomRightRadius: 4, overflow: 'hidden',
-              }}>{name}</Text>
-            </View>
-          ))}
-        </View>
+        <MakeupOverlay zones={faceZones} styles={currentStyles} />
       </View>
 
       <View style={s.tools}>
@@ -274,7 +307,6 @@ const s = StyleSheet.create({
   headerBtns: { flexDirection: 'row', gap: 12 },
   iconBtn: { padding: 8, backgroundColor: '#333', borderRadius: 8 },
   camWrap: { width: SCREEN_W, height: CAM_H, position: 'relative' },
-  faceOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   tools: {
     flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12,
     paddingHorizontal: 8, backgroundColor: '#222',

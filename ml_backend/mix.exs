@@ -26,6 +26,8 @@ defmodule MlBackend.MixProject do
       {:stb_image, "~> 0.6"},
       {:scholar, "~> 0.4"},
       {:plug_cowboy, "~> 2.7"},
+      {:phoenix, "~> 1.7"},
+      {:phoenix_pubsub, "~> 2.1"},
       {:jason, "~> 1.4"},
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},

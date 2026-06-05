@@ -29,7 +29,20 @@
           "cameraPermission": "Glow needs camera access for skin analysis."
         }
       ],
-      "expo-video"
-    ]
+      "expo-video",
+      "expo-status-bar",
+      [
+        "react-native-fast-tflite",
+        {
+          "enableAndroidGpuLibraries": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d2c395ef-51ae-460d-a55c-24f70cddb0d8"
+      }
+    },
+    "owner": "mohamad.hamad"
   }
 }

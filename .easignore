@@ -1,0 +1,11 @@
+node_modules
+android/build
+android/app/build
+android/.gradle
+android/.kotlin
+android/captures
+android/keystores
+.expo
+dist
+*.tsbuildinfo
+*.log

@@ -13,3 +13,10 @@ config :ml_backend, MlBackend.Repo,
   pool_size: 10
 
 config :ml_backend, ecto_repos: [MlBackend.Repo]
+
+config :ml_backend, MlBackendWeb.Endpoint,
+  url: [host: "0.0.0.0"],
+  http: [port: 4001],
+  server: true,
+  debug_errors: true,
+  secret_key_base: "kQ8YzN2dXm6pVL5sT9vB3wJrF7cG4hAe1iU0oPnMbCqWlujRyExDgSaHtOfzIk"

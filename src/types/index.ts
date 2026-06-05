@@ -58,6 +58,9 @@ export type RootStackParamList = {
   VirtualTryOn: undefined;
   VideoScanner: undefined;
   ARMakeup: undefined;
+  ARStream: undefined;
+  SignIn: undefined;
+  Register: undefined;
 };
 
 export type TabParamList = {
@@ -65,5 +68,5 @@ export type TabParamList = {
   ScanTab: undefined;
   VideoTab: undefined;
   ARTab: undefined;
-  ProfileTab: undefined;
+  ARStreamTab: undefined;
 };

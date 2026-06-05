@@ -5,6 +5,8 @@ defmodule MlBackend.Application do
   def start(_type, _args) do
     children = [
       MlBackend.Repo,
+      MlBackendWeb.Endpoint,
+      MlBackend.ARMakeup,
       {Plug.Cowboy, scheme: :http, plug: MlBackend.Api, options: [port: 4000]}
     ]
 

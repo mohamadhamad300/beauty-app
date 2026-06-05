@@ -10,4 +10,16 @@ dist/
 web-build/
 .env
 .env.local
-.ml_backend/
+.env.production
+.env.development
+android/.gradle/
+android/app/build/
+android/build/
+*.log
+debug_build*.log
+expo_build.log
+__pycache__/
+*.pyc
+.DS_Store
+*.hprof
+*.apk

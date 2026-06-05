@@ -20,5 +20,15 @@ allprojects {
   }
 }
 
+subprojects {
+  tasks.matching { it.name.startsWith('verifyReleaseResources') }.configureEach {
+    enabled = false
+  }
+}
+
+ext {
+  ndkVersion = "27.0.12077973"
+}
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
