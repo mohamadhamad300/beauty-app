@@ -16,7 +16,7 @@ export function connectARServer(
     socket = null;
     channel = null;
   }
-  const fullUrl = serverUrl.replace(/\/+$/, '') + '/ws';
+  const fullUrl = serverUrl.replace(/\/+$/, '') + '/ws/websocket';
   socket = new Socket(fullUrl, {
     transport: WebSocket,
     heartbeatIntervalMs: 5000,

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, Image, Dimensions, Platform,
+  View, Text, StyleSheet, Pressable, Image, Dimensions,
 } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, usePhotoOutput, CommonResolutions } from 'react-native-vision-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { connectARServer, sendFrame, disconnectARServer } from '../services/arWe
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CAM_H = SCREEN_W * 4 / 3;
+const CAPTURE_INTERVAL = 600;
 
 type ServerStatus = 'idle' | 'connecting' | 'connected' | 'error';
 
@@ -28,11 +29,20 @@ export default function ARStreamScreen() {
   const [camError, setCamError] = useState<string | null>(null);
   const [serverAddress, setServerAddress] = useState('ws://10.0.0.23:4001');
   const streamRef = useRef(false);
-  const frameCount = useRef(0);
+  const frameSent = useRef(0);
+  const frameRcvd = useRef(0);
+  const busyRef = useRef(false);
+  const [stats, setStats] = useState('');
+
+  const tick = useCallback(() => {
+    frameRcvd.current += 1;
+  }, []);
 
   const onFrame = useCallback((base64jpeg: string) => {
     setProcessedImage(`data:image/jpeg;base64,${base64jpeg}`);
-  }, []);
+    busyRef.current = false;
+    tick();
+  }, [tick]);
 
   const onStatus = useCallback((status: ServerStatus, msg?: string) => {
     setServerStatus(status);
@@ -41,41 +51,59 @@ export default function ARStreamScreen() {
     }
   }, []);
 
+  const captureOne = useCallback(async (): Promise<void> => {
+    if (!streamRef.current || busyRef.current) return;
+    busyRef.current = true;
+    let timedOut = false;
+    setTimeout(() => { if (!timedOut) busyRef.current = false; }, 3000);
+    try {
+      const photo = await photoOutput.capturePhoto({
+        qualityPrioritization: 'speed',
+        quality: 0.3,
+        enableShutterSound: false,
+      }, {});
+      const photoPath = await photo.saveToTemporaryFileAsync();
+      const base64 = await FileSystem.readAsStringAsync(photoPath, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      photo.dispose();
+      frameSent.current += 1;
+      sendFrame(base64);
+      setStats(`→${frameSent.current}  ←${frameRcvd.current}`);
+    } catch (e: any) {
+      timedOut = true;
+      busyRef.current = false;
+      if (streamRef.current) {
+        setCamError(`Capture error: ${e.message}`);
+      }
+    }
+  }, [photoOutput]);
+
   const startStream = useCallback(async () => {
     setCamError(null);
     setServerStatus('connecting');
     streamRef.current = true;
+    frameSent.current = 0;
+    frameRcvd.current = 0;
+    setStats('');
 
     connectARServer(serverAddress, onFrame, onStatus);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((r) => setTimeout(r, 1000));
 
-    const capture = async () => {
+    const loop = async () => {
       if (!streamRef.current) return;
-      try {
-        const photo = await photoOutput.capturePhoto({
-          qualityPrioritization: 'speed',
-          quality: 0.3,
-          enableShutterSound: false,
-        }, {});
-        const photoPath = await photo.saveToTemporaryFileAsync();
-        const base64 = await FileSystem.readAsStringAsync(photoPath, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        photo.dispose();
-        frameCount.current += 1;
-        sendFrame(base64);
-      } catch (e: any) {
-        if (streamRef.current) {
-          setCamError(`Capture error: ${e.message}`);
-        }
+      await captureOne();
+      if (streamRef.current) {
+        setTimeout(loop, CAPTURE_INTERVAL);
       }
     };
-    setTimeout(capture, 100);
-  }, [serverAddress, photoOutput, onFrame, onStatus]);
+    loop();
+  }, [serverAddress, photoOutput, onFrame, onStatus, captureOne]);
 
   const stopStream = useCallback(() => {
     streamRef.current = false;
+    busyRef.current = false;
     disconnectARServer();
     setServerStatus('idle');
   }, []);
@@ -83,6 +111,7 @@ export default function ARStreamScreen() {
   useEffect(() => {
     return () => {
       streamRef.current = false;
+      busyRef.current = false;
       disconnectARServer();
     };
   }, []);
@@ -154,7 +183,7 @@ export default function ARStreamScreen() {
             <Text style={s.testBtnText}>Disconnect</Text>
           </Pressable>
         )}
-        <Text style={s.framesText}>Frames sent: {frameCount.current}</Text>
+        {stats ? <Text style={s.framesText}>Sent {stats}</Text> : null}
       </View>
     </View>
   );

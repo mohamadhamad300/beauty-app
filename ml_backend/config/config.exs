@@ -19,4 +19,5 @@ config :ml_backend, MlBackendWeb.Endpoint,
   http: [port: 4001],
   server: true,
   debug_errors: true,
+  pubsub_server: MlBackend.PubSub,
   secret_key_base: "kQ8YzN2dXm6pVL5sT9vB3wJrF7cG4hAe1iU0oPnMbCqWlujRyExDgSaHtOfzIk"

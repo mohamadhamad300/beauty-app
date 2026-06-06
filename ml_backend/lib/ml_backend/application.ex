@@ -5,6 +5,7 @@ defmodule MlBackend.Application do
   def start(_type, _args) do
     children = [
       MlBackend.Repo,
+      {Phoenix.PubSub, name: MlBackend.PubSub},
       MlBackendWeb.Endpoint,
       MlBackend.ARMakeup,
       {Plug.Cowboy, scheme: :http, plug: MlBackend.Api, options: [port: 4000]}
