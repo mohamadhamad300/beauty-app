@@ -49,9 +49,22 @@ FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365
 def get_pts(landmarks, w, h, indices):
     return [(int(landmarks[i].x * w), int(landmarks[i].y * h)) for i in indices if i < len(landmarks)]
 
+DRAW_LANDMARKS = True
+LANDMARK_COLOR = (0, 255, 0)
+EYE_OUTLINE_COLOR = (255, 255, 0)
+LIP_OUTLINE_COLOR = (0, 200, 255)
+
+def draw_contour(img, pts, color, thickness=2):
+    if len(pts) < 2:
+        return
+    pts_arr = np.array(pts, dtype=np.int32)
+    hull = cv2.convexHull(pts_arr)
+    cv2.polylines(img, [hull], isClosed=True, color=color, thickness=thickness)
+
 def draw_makeup(img, face_landmarks):
     h, w, _ = img.shape
     overlay = img.copy()
+    detection = img.copy()
 
     for name, indices, color in [
         ("lips", LIPS_OUTER + LIPS_INNER, (60, 60, 220)),
@@ -89,6 +102,26 @@ def draw_makeup(img, face_landmarks):
             m = np.zeros((h, w, 3), dtype=np.uint8)
             cv2.fillConvexPoly(m, hull, color)
             result = cv2.addWeighted(result, 1.0, m, 0.25, 0)
+
+    if DRAW_LANDMARKS:
+        for name, indices, color, label in [
+            ("left_eye", LEFT_EYE_IDS, EYE_OUTLINE_COLOR, "L-EYE"),
+            ("right_eye", RIGHT_EYE_IDS, EYE_OUTLINE_COLOR, "R-EYE"),
+            ("lips", LIPS_OUTER, LIP_OUTLINE_COLOR, "LIPS"),
+        ]:
+            pts = get_pts(face_landmarks, w, h, indices)
+            if pts:
+                draw_contour(detection, pts, color, 2)
+                cx = int(np.mean([p[0] for p in pts]))
+                cy = int(np.mean([p[1] for p in pts]))
+                cv2.putText(detection, label, (cx - 20, cy - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        for lm in face_landmarks:
+            x, y = int(lm.x * w), int(lm.y * h)
+            cv2.circle(detection, (x, y), 1, LANDMARK_COLOR, -1)
+
+        result = cv2.addWeighted(result, 0.7, detection, 0.3, 0)
 
     return result
 

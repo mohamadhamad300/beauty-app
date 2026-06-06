@@ -1,12 +1,14 @@
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { LogIn, UserPlus, LogOut, User } from 'lucide-react-native';
+import { LogIn, UserPlus, LogOut, Menu } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { colors } from '../constants/theme';
 
 export default function AuthMenu() {
   const { isLoggedIn, user, logout } = useAuth();
   const nav = useNavigation<any>();
+  const [open, setOpen] = useState(false);
 
   if (isLoggedIn && user) {
     return (
@@ -26,27 +28,33 @@ export default function AuthMenu() {
   }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.scroll}>
-      <Pressable style={[s.btn, s.btnPrimary]} onPress={() => nav.navigate('SignIn')}>
-        <LogIn color="#fff" size={16} />
-        <Text style={s.btnText}>Sign In</Text>
+    <View style={s.wrapper}>
+      <Pressable style={s.hamburger} onPress={() => setOpen(!open)}>
+        <Menu color="#fff" size={22} />
       </Pressable>
-      <Pressable style={s.btn} onPress={() => nav.navigate('Register')}>
-        <UserPlus color="#fff" size={16} />
-        <Text style={s.btnText}>Register</Text>
-      </Pressable>
-    </ScrollView>
+      {open && (
+        <View style={s.dropdown}>
+          <Pressable style={[s.dropBtn, s.btnPrimary]} onPress={() => { setOpen(false); nav.navigate('SignIn'); }}>
+            <LogIn color="#fff" size={16} />
+            <Text style={s.btnText}>Sign In</Text>
+          </Pressable>
+          <Pressable style={s.dropBtn} onPress={() => { setOpen(false); nav.navigate('Register'); }}>
+            <UserPlus color="#fff" size={16} />
+            <Text style={s.btnText}>Register</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  wrapper: {
+    position: 'relative', zIndex: 99,
+  },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#222',
-  },
-  scroll: {
-    flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8, gap: 8,
-    backgroundColor: '#222',
   },
   userInfo: {
     flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1,
@@ -61,15 +69,26 @@ const s = StyleSheet.create({
   userName: {
     color: '#fff', fontSize: 14, fontWeight: '600', flex: 1,
   },
-  btn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#333', paddingVertical: 8, paddingHorizontal: 14,
+  hamburger: {
+    padding: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  dropdown: {
+    position: 'absolute', top: 44, right: 8,
+    backgroundColor: '#2a2a2a', borderRadius: 10,
+    padding: 6, gap: 4, elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 6,
+    minWidth: 150,
+  },
+  dropBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#333', paddingVertical: 10, paddingHorizontal: 14,
     borderRadius: 8,
   },
   btnPrimary: {
     backgroundColor: colors.primary,
   },
   btnText: {
-    color: '#fff', fontSize: 13, fontWeight: '600',
+    color: '#fff', fontSize: 14, fontWeight: '600',
   },
 });

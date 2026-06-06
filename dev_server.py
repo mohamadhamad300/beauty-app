@@ -8,6 +8,7 @@ import threading
 import subprocess
 import time
 import signal
+import shutil
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
@@ -67,16 +68,10 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/vnd.android.package-archive")
                 self.send_header("Content-Disposition", f"attachment; filename=app-{kind}.apk")
                 self.send_header("Content-Length", str(size))
+                self.send_header("Connection", "close")
                 self.end_headers()
                 with open(apk, "rb") as f:
-                    while True:
-                        chunk = f.read(65536)
-                        if not chunk:
-                            break
-                        try:
-                            self.wfile.write(chunk)
-                        except:
-                            break
+                    shutil.copyfileobj(f, self.wfile)
             else:
                 self.send_error(404, f"{kind} APK not found")
         else:
@@ -109,20 +104,29 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
 
     def _start_metro(self):
         global metro_process
-        if metro_process and metro_process.poll() is None:
-            log("Metro already running")
-            return
-        log("Starting Metro bundler...")
-        env = os.environ.copy()
-        env["EXPO_PUBLIC_GEMINI_API_KEY"] = ""
-        env["EXPO_PUBLIC_GOOGLE_VISION_API_KEY"] = ""
-        metro_process = subprocess.Popen(
-            ["npx", "react-native", "start", "--host", "0.0.0.0", "--port", str(metro_port)],
-            cwd=BASE_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            env=env, creationflags=subprocess.CREATE_NO_WINDOW,
-            text=True, bufsize=1
-        )
-        threading.Thread(target=self._pipe_metro_logs, daemon=True).start()
+        try:
+            if metro_process and metro_process.poll() is None:
+                log("Metro already running")
+                return
+            log("Starting Metro bundler...")
+            env = os.environ.copy()
+            env["EXPO_PUBLIC_GEMINI_API_KEY"] = ""
+            env["EXPO_PUBLIC_GOOGLE_VISION_API_KEY"] = ""
+            npx_path = r"H:\Node\npx.cmd"
+            if not os.path.exists(npx_path):
+                log(f"npx not found at {npx_path}")
+                return
+            metro_process = subprocess.Popen(
+                [npx_path, "react-native", "start",
+                 "--host", "0.0.0.0", "--port", str(metro_port)],
+                cwd=BASE_DIR, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                env=env, creationflags=subprocess.CREATE_NO_WINDOW,
+                text=True, bufsize=1, encoding="utf-8", errors="replace"
+            )
+            log(f"Metro PID: {metro_process.pid}")
+            threading.Thread(target=self._pipe_metro_logs, daemon=True).start()
+        except Exception as e:
+            log(f"Metro start error: {e}")
 
     def _pipe_metro_logs(self):
         global metro_process
