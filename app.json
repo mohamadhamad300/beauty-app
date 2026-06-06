@@ -3,6 +3,7 @@
     "name": "Glow - Beauty & Skincare",
     "slug": "beauty-app",
     "version": "1.0.0",
+    "hostUri": "10.0.0.23:8081",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "ios": {

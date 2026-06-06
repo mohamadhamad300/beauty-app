@@ -53,23 +53,22 @@ export default function ARStreamScreen() {
     const capture = async () => {
       if (!streamRef.current) return;
       try {
-        const photo = await photoOutput.takePhoto({
+        const photo = await photoOutput.capturePhoto({
           qualityPrioritization: 'speed',
           quality: 0.3,
           enableShutterSound: false,
-        });
-        const base64 = await FileSystem.readAsStringAsync(photo.path, {
+        }, {});
+        const photoPath = await photo.saveToTemporaryFileAsync();
+        const base64 = await FileSystem.readAsStringAsync(photoPath, {
           encoding: FileSystem.EncodingType.Base64,
         });
+        photo.dispose();
         frameCount.current += 1;
         sendFrame(base64);
       } catch (e: any) {
         if (streamRef.current) {
           setCamError(`Capture error: ${e.message}`);
         }
-      }
-      if (streamRef.current) {
-        setTimeout(capture, 300);
       }
     };
     setTimeout(capture, 100);

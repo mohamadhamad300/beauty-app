@@ -9,6 +9,7 @@ import subprocess
 import time
 import signal
 import shutil
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
@@ -93,6 +94,9 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/api/metro/stop":
             self._stop_metro()
             self.send_json({"status": "stopped"})
+        elif path == "/api/metro/reload":
+            self._reload_metro()
+            self.send_json({"status": "reloading"})
         elif path == "/api/build/release":
             threading.Thread(target=self._run_build, args=("release",), daemon=True).start()
             self.send_json({"status": "building"})
@@ -148,6 +152,15 @@ class DevHandler(http.server.BaseHTTPRequestHandler):
                     metro_process.send_signal(signal.SIGTERM)
                 log("Metro stopped")
             metro_process = None
+
+    def _reload_metro(self):
+        try:
+            url = f"http://localhost:{metro_port}/reload"
+            log(f"Reloading Metro clients via {url}")
+            urllib.request.urlopen(url, timeout=5)
+            log("Metro reload triggered")
+        except Exception as e:
+            log(f"Metro reload error: {e}")
 
     def _run_build(self, kind):
         global building, build_type
@@ -238,6 +251,7 @@ h1{{font-size:20px;margin-bottom:4px;color:#fff}}
 <button class="btn btn-blue" onclick="buildApp('debug')">Build Debug</button>
 <button class="btn btn-gray" id="dl-release" onclick="downloadApk('release')">Download Release</button>
 <button class="btn btn-gray" id="dl-debug" onclick="downloadApk('debug')">Download Debug</button>
+<button class="btn btn-gray" id="btn-reload" onclick="reloadMetro()">Reload Metro</button>
 </div>
 
 <div class="log-box" id="log-box">Waiting for logs...</div>
@@ -281,6 +295,11 @@ var row=document.createElement('div');row.className=cls;row.textContent=l;el.app
 el.scrollTop=el.scrollHeight;
 }}
 }});
+}}
+
+function reloadMetro() {{
+addLog('Reloading Metro...','metro');
+fetch('/api/metro/reload',{{method:'POST'}}).then(function(){{setTimeout(poll,2000)}});
 }}
 
 function toggleMetro() {{
