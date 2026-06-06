@@ -2,6 +2,7 @@ package com.helloworld
 
 import android.app.Application
 import android.content.res.Configuration
+import android.preference.PreferenceManager
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -29,6 +30,10 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    PreferenceManager.getDefaultSharedPreferences(this)
+      .edit()
+      .putString("debug_http_host", "10.0.0.23:8081")
+      .apply()
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {
